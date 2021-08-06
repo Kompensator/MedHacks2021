@@ -8,24 +8,24 @@ import os
 import cv2
 from termcolor import cprint
 from copy import deepcopy
+from tqdm import tqdm
+from multiprocessing import Pool
 
 tau3_hard = r'C:\Users\dingyi.zhang\Downloads\AlphaTau3\hard_dataset'
 tau1 = r'C:\Users\dingyi.zhang\Documents\AlphaTau\Tau1'
-os.chdir(r"C:\Users\dingyi.zhang\Documents\AlphaTau")
+tau3_train = r'C:\Users\dingyi.zhang\Downloads\AlphaTau3\train'
 
-scans = os.listdir(tau3_hard)
+current_folder = tau3_train
 
-def bbox2(img, padding=40):
-    rows = np.any(img, axis=1)
-    cols = np.any(img, axis=0)
-    ymin, ymax = np.where(rows)[0][[0, -1]]
-    xmin, xmax = np.where(cols)[0][[0, -1]]
-    return ymin-padding, ymax+padding, xmin-padding, xmax+padding
+padding = 20
+square = True       # if False, bounding box will be a rectangle tangential to the outline of body
+
+scans = os.listdir(current_folder)
 
 
-for s in scans:
-    img_dir = os.path.join(tau3_hard, s + f'\\images\\{s}.npy')
-    mask_dir = os.path.join(tau3_hard, s + '\\masks\\mask.npy')
+def worker(s):
+    img_dir = os.path.join(current_folder, s + f'\\images\\{s}.npy')
+    mask_dir = os.path.join(current_folder, s + '\\masks\\mask.npy')
     img = np.load(img_dir)
     mask = np.load(mask_dir)
     
@@ -55,6 +55,9 @@ for s in scans:
                 if len(c) > longest:
                     longest = i
             contour = contour[longest]
+            # contour_plot = cv2.drawContours(slice, [contour], -1, 1, 1)
+            # plt.imshow(contour_plot)
+            # plt.show()
             contour = np.squeeze(contour, axis=1)
 
             # find bounding cooredinates
@@ -80,16 +83,43 @@ for s in scans:
                 Y_MAX = ymax
         
         # add padding to bounding box
-        padding = 15
         X_MIN, X_MAX, Y_MIN, Y_MAX = X_MIN-padding, X_MAX+padding, Y_MIN-padding, Y_MAX+padding
-        print(f"Bounding box for {s}: {X_MIN}, {X_MAX}, {Y_MIN}, {Y_MAX}")
+        x_center = (X_MAX + X_MIN) / 2
+        y_center = (Y_MAX + Y_MIN) / 2
+        x_range = X_MAX - X_MIN
+        y_range = Y_MAX - Y_MIN
+
+        # make the bounding box a square based on the largest dimension
+        if square:
+            if x_range > y_range:
+                Y_MAX = int(y_center + x_range/2)
+                Y_MIN = int(y_center - x_range/2)
+            elif y_range > x_range:
+                X_MAX = int(x_center + y_range/2)
+                X_MIN = int(x_center - y_range/2)
+
+        print(f"{s} after crop: {X_MAX-X_MIN}x{Y_MAX-Y_MIN}")
+
+        # plt.imshow(slice)
+        # plt.plot(X_MIN, Y_MIN, 'r.')
+        # plt.plot(X_MAX, Y_MAX, 'r.')
+        # plt.show()
 
         # crop the image
         img = orig_img[X_MIN:X_MAX, Y_MIN:Y_MAX, :]
         mask = mask[X_MIN:X_MAX, Y_MIN:Y_MAX, :]
 
+        save_dir = r'C:\Users\dingyi.zhang\Documents\MedHacks2021\Tau3_train'
         nifti = nib.Nifti1Image(img, np.eye(4))
-        nib.save(nifti, f"{s}_image.nii.gz")
+        nib.save(nifti, f"{save_dir}\\{s}_image.nii.gz")
         nifti = nib.Nifti1Image(mask, np.eye(4))
-        nib.save(nifti, f"{s}_mask.nii.gz")
+        nib.save(nifti, f"{save_dir}\\{s}_mask.nii.gz")
     
+if __name__ == "__main__":
+    # multiprocessing
+    p = Pool(10)
+    p.map(worker, scans)
+
+    # simple processing
+    # for s in tqdm(scans):
+    #     worker(s)
