@@ -11,11 +11,15 @@ from tqdm import tqdm
 def inference():
     with open("UNet3D_config", 'rb') as f:
         model_config = load(f)
+
+    GPU = True
+
     model = UNet3D(**model_config, testing=True)      # model is running on CPU
     model.load_state_dict(torch.load(r"C:\Users\dingyi.zhang\Documents\CV-Calcium-DY\checkpoints\test_dim512_features9_112.h5"))
-    model.cuda()
+    if GPU:
+        model.cuda()
 
-    test_dataset = AlphaTau3_train(start=0.2, end=0.24)
+    test_dataset = AlphaTau3_train(start=0.5, end=0.55)
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=1)
     weight = torch.Tensor([0.01, 1.0])
     loss = torch.nn.CrossEntropyLoss(weight=weight)
@@ -24,15 +28,21 @@ def inference():
     for i_batch, (data, target) in tqdm(enumerate(test_loader)):
         model.eval()
         with torch.no_grad():
-            data, target = data.cuda(), target.cuda()
+            if GPU:
+                data, target = data.cuda(), target.cuda()
             pred = model(data)
             pred = torch.argmax(pred, dim=1, keepdim=True)
 
-        pred = pred.cpu().detach().numpy()
+        if GPU:
+            pred = pred.cpu().detach().numpy()
+            data = data.cpu().detach().numpy()
+            target = target.cpu().detach().numpy()
+        else:
+            pred = pred.numpy()
+            data = data.numpy()
+            target = target.numpy()
         pred = np.squeeze(np.squeeze(pred, axis=0), axis=0)
-        data = data.cpu().detach().numpy()
         data = np.squeeze(np.squeeze(data, axis=0), axis=0)
-        target = target.cpu().detach().numpy()
         target = np.squeeze(target, axis=0)
         inputs.append(data)
         outputs.append(pred)

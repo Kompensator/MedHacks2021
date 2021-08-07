@@ -442,8 +442,8 @@ def build_trainer(config):
     loss_criterion = get_loss_criterion(config)
     eval_criterion = get_evaluation_metric(config)
 
-    train_dataset = AlphaTau3_train(start=0.0, end=0.4)
-    val_dataset = AlphaTau3_train(start=0.4, end=0.48)
+    train_dataset = AlphaTau3_train(start=0.0, end=0.01)
+    val_dataset = AlphaTau3_train(start=0.01, end=0.012)
 
     train_loader = DataLoader(train_dataset, batch_size=1)       #NOTE: batchsize is here!
     val_loader = DataLoader(val_dataset, batch_size=1)
@@ -515,4 +515,4 @@ def main(run_name='default'):
 
 
 if __name__ == '__main__':
-    main(run_name='dim512_features9_40%')
+    main(run_name='dim512_features9_10%')
