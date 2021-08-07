@@ -82,7 +82,7 @@ lr_scheduler:
   factor: 0.2
   mode: min
   name: ReduceLROnPlateau
-  patience: 15
+  patience: 13
 manual_seed: 42
 model:
   f_maps: 10

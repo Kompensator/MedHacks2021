@@ -167,6 +167,7 @@ class UNet3DTrainer:
             save_cp_interval = 2
             self.scaler = torch.cuda.amp.GradScaler(enabled=True)
             self.DICE = GeneralizedDiceLoss()
+            self.DICE_loss = GeneralizedDiceLoss(loss=True)
             for _ in range(self.num_epoch, 200):
                 try:
                     should_terminate = self.train()
@@ -319,10 +320,12 @@ class UNet3DTrainer:
         
         dice = self.DICE(output, target)
         # compute the loss
-        if weight is None:
-            loss = self.loss_criterion(output, target.long())
-        else:
-            loss = self.loss_criterion(output, target.long(), weight)
+        loss = self.DICE_loss(output, target)
+
+        # if weight is None:
+        #     loss = self.loss_criterion(output, target.long())
+        # else:
+        #     loss = self.loss_criterion(output, target.long(), weight)
 
         return dice.item(), loss
 
@@ -442,8 +445,8 @@ def build_trainer(config):
     loss_criterion = get_loss_criterion(config)
     eval_criterion = get_evaluation_metric(config)
 
-    train_dataset = AlphaTau3_train(start=0.0, end=0.01)
-    val_dataset = AlphaTau3_train(start=0.01, end=0.012)
+    train_dataset = AlphaTau3_train(start=0.0, end=0.2)
+    val_dataset = AlphaTau3_train(start=0.2, end=0.24)
 
     train_loader = DataLoader(train_dataset, batch_size=1)       #NOTE: batchsize is here!
     val_loader = DataLoader(val_dataset, batch_size=1)
@@ -515,4 +518,4 @@ def main(run_name='default'):
 
 
 if __name__ == '__main__':
-    main(run_name='dim512_features9_10%')
+    main(run_name='dim512_DICE_20%')

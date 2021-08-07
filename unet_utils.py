@@ -297,7 +297,7 @@ class _AbstractDiceLoss(nn.Module):
 
         # average Dice score across all channels/classes
         if self.loss:
-            return 1. - torch.mean(per_channel_dice)
+            return 1.0 - torch.mean(per_channel_dice)
         else:
             return torch.mean(per_channel_dice)
 
@@ -319,8 +319,8 @@ class GeneralizedDiceLoss(_AbstractDiceLoss):
     """Computes Generalized Dice Loss (GDL) as described in https://arxiv.org/pdf/1707.03237.pdf.
     """
 
-    def __init__(self, normalization='softmax', epsilon=1e-6, n_classes=2):
-        super().__init__(weight=None, normalization=normalization)
+    def __init__(self, normalization='softmax', epsilon=1e-6, n_classes=2, loss=False):
+        super().__init__(weight=None, normalization=normalization, loss=loss)
         self.epsilon = epsilon
         self.n_classes = n_classes
         
