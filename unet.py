@@ -163,7 +163,9 @@ class UNet3DTrainer:
 
     def fit(self, run_name="default"):
         with start_run(run_name=run_name):
-            save_cp_interval = 10
+            self.run_name = run_name
+            save_cp_interval = 2
+            self.scaler = torch.cuda.amp.GradScaler(enabled=True)
             for _ in range(self.num_epoch, 200):
                 try:
                     should_terminate = self.train()
@@ -185,7 +187,7 @@ class UNet3DTrainer:
 
 
     def save_model(self):
-        torch.save(self.model.state_dict(), 'checkpoints\\3DUNet_{}.h5'.format(self.num_epoch))
+        torch.save(self.model.state_dict(), 'checkpoints\\{}_{}.h5'.format(self.run_name, self.num_epoch))
 
     def train(self):
         """Trains the model for 1 epoch.
@@ -202,8 +204,9 @@ class UNet3DTrainer:
         for t in self.loaders['train']:
             input, target, weight = self._split_training_batch(t)
             iteration_per_epoch = self.loaders['train'].dataset.__len__() // input.shape[0] 
-
-            output, loss = self._forward_pass(input, target, weight)
+            
+            with torch.cuda.amp.autocast(enabled=True):
+                output, loss = self._forward_pass(input, target, weight)
 
             cprint(f'Training iteration [{self.num_iterations + 1}/{iteration_per_epoch}]. '
                         f'Epoch [{self.num_epoch}/{self.max_num_epochs - 1}] Loss [{loss}]', 'green')
@@ -211,8 +214,9 @@ class UNet3DTrainer:
             train_losses.update(loss.item(), self._batch_size(input))
 
             self.optimizer.zero_grad()
-            loss.backward()
-            self.optimizer.step()
+            self.scaler.scale(loss).backward()
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
 
             # if self.should_stop():
             #     return True
@@ -227,9 +231,9 @@ class UNet3DTrainer:
         #     self.scheduler.step(eval_score)
         # else:
         #     self.scheduler.step()
-        is_best = self._is_best_eval_score(eval_score)
+        # is_best = self._is_best_eval_score(eval_score)
 
-        self._save_checkpoint(is_best)
+        # self._save_checkpoint(is_best)
 
         # log stats, params and images
         cprint(f'Train loss: {train_losses.avg}. Validation loss: {val_loss}', 'blue')
@@ -277,8 +281,8 @@ class UNet3DTrainer:
                 if i % 100 == 0:
                     self._log_images(input, target, output, 'val_')
 
-                eval_score = self.eval_criterion(output, target)
-                val_scores.update(eval_score.item(), self._batch_size(input))
+                # eval_score = self.eval_criterion(output, target)          # chance this to dice
+                # val_scores.update(eval_score.item(), self._batch_size(input))
 
                 if self.sample_plotter is not None:
                     self.sample_plotter(i, input, output, target, 'val')
@@ -288,8 +292,8 @@ class UNet3DTrainer:
                     break
 
             # self._log_stats('val', val_losses.avg, val_scores.avg)
-            cprint(f'Validation finished. Loss: {val_losses.avg}. Evaluation score: {val_scores.avg}', 'blue')
-            return val_losses.avg, val_scores.avg
+            # cprint(f'Validation finished. Loss: {val_losses.avg}. Evaluation score: {0}', 'blue')
+            return val_losses.avg, 0
 
     def _split_training_batch(self, t):
         def _move_to_device(input):
@@ -432,8 +436,8 @@ def build_trainer(config):
     loss_criterion = get_loss_criterion(config)
     eval_criterion = get_evaluation_metric(config)
 
-    train_dataset = CVC(start=0.0, end=0.90)
-    val_dataset = CVC(start=0.90, end=1.0)
+    train_dataset = AlphaTau3_train(start=0.0, end=0.4)
+    val_dataset = AlphaTau3_train(start=0.4, end=0.48)
 
     train_loader = DataLoader(train_dataset, batch_size=1)       #NOTE: batchsize is here!
     val_loader = DataLoader(val_dataset, batch_size=1)
@@ -489,13 +493,8 @@ def build_trainer(config):
                              **trainer_config)
 
 
-def main():
-    # Load and log experiment configuration
-    # config = load_config()
+def main(run_name='default'):
     config = get_config()
-    # cprint(config, 'blue')
-    run_name = "test_crop_heuristic"
-
     manual_seed = config.get('manual_seed', None)
     if manual_seed is not None:
         cprint(f'Seed the RNG for all devices with {manual_seed}', 'green')
@@ -506,8 +505,8 @@ def main():
     
     trainer = build_trainer(config)
     # Start training
-    trainer.fit()
+    trainer.fit(run_name=run_name)
 
 
 if __name__ == '__main__':
-    main(run_name)
+    main(run_name='dim512_features9_40%')

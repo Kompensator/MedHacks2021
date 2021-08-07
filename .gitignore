@@ -129,3 +129,7 @@ dmypy.json
 .pyre/
 
 Tau3_train/*
+checkpoints/*
+inference/*
+mlruns/*
+*.nii.gz
