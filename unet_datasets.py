@@ -35,92 +35,9 @@ def random_rotate_90(m, random_state, **kwargs):
     return m
 
 class AlphaTau3_train(Dataset):
-    def __init__(self, start=0.0, end=0.8, seed=42):
+    def __init__(self, start=0.0, end=0.8, seed=42, data_path=r'C:\Users\dingyi.zhang\Documents\MedHacks2021\Tau3_train', cores=10):
         super(AlphaTau3_train, self).__init__()
-        self.images, self.labels = boss(start, end, seed)
-        # random.seed(seed)
-        # self.start = start
-        # self.end = end
-        # self.data_path = r'C:\Users\dingyi.zhang\Documents\MedHacks2021\Tau3_train'
-        # self.data_path_list = os.listdir(self.data_path)
-        # self.data_path_list.sort()
-        # self.image_list = []
-        # self.label_list = []
-        # self.images = []
-        # self.labels = []
-        # for i in self.data_path_list:
-        #     if "image" in i:
-        #         self.image_list.append(i)
-        #     elif "mask" in i:
-        #         self.label_list.append(i)
-
-        # c = list(zip(self.image_list, self.label_list))
-        # random.shuffle(c)
-        # self.image_list, self.label_list = zip(*c)
-
-        # self.image_list = self.image_list[int(start*len(self.image_list)): int(end*len(self.image_list))]
-        # self.label_list = self.label_list[int(start*len(self.label_list)): int(end*len(self.label_list))]
-
-        # for image_name, label_name in tqdm(zip(self.image_list, self.label_list)):
-        #     if image_name.split('_')[0] == label_name.split('_')[0]:
-        #         try:
-        #             image = np.array(nib.load(os.path.join(self.data_path, image_name)).get_fdata())
-        #             label = np.array(nib.load(os.path.join(self.data_path, label_name)).get_fdata())
-        #             assert image.shape == label.shape, "{} and {} dont have same shape".format(image_name, label_name)
-
-        #             target_dim = (512, 512, 40)
-        #             scaling = (target_dim[0]/image.shape[0], target_dim[1]/image.shape[1], target_dim[2]/image.shape[2])
-        #             image = self.grid_interpolator(image, scaling, 'linear')
-        #             label = self.grid_interpolator(label, scaling, 'nearest')
-                    
-        #             assert image.shape == label.shape, "{} and {} dont have same shape after resizing".format(image_name, label_name)
-                    
-        #             # one-hot encode all class in label to be 1
-        #             label[label != 0] = 1
-
-        #             if image.shape != target_dim:
-        #                 image = self.pad(image, target_dim)
-        #                 label = self.pad(label, target_dim)
-
-        #             self.images.append(np.expand_dims(image, axis=0))
-        #             self.labels.append(label)
-        #         except:
-        #             cprint("Error while loading {}".format(image_name))
-        #             continue
-        #     else:
-        #         cprint(f"{image_name} and {label_name} do not match", "red")
-        
-        # self.images = torch.from_numpy(np.array(self.images)).float()
-        # self.labels = torch.from_numpy(np.array(self.labels)).long()
-
-        # img_mean = torch.mean(self.images)
-        # img_std = torch.std(self.images)
-        # img_normalize = Normalize([img_mean], [img_std])
-        # self.images = img_normalize(self.images)
-
-    def pad(self, arr, target_shape):
-        """ In case arr.shape != target_shape due to interpolation"""
-        diff_shape = [i-j for i, j in zip(target_shape, arr.shape)]
-        arr = np.pad(arr, ((0, diff_shape[0]), (0, diff_shape[1]), (0, diff_shape[2])), 'constant')
-        return arr
-        
-    def grid_interpolator(self, arr, scaling, interpolation):
-        """ Implements this solution to resize in 3D using linear for scan and nearest for label
-            https://stackoverflow.com/questions/47775621/interpolate-resize-3d-array    
-        """
-        orig_shape  = arr.shape
-        target_shape = (scaling[0]*orig_shape[0], scaling[1]*orig_shape[1], scaling[2]*orig_shape[2])
-
-        steps = [1.0, 1.0, 1.0]
-        x, y, z = [steps[k] * np.arange(arr.shape[k]) for k in range(3)]  # original grid
-        interpolator = RegularGridInterpolator((x, y, z), arr, method=interpolation)
-
-        new_steps = [steps[i] * (orig_shape[i] / target_shape[i]) for i in range(3)]
-        dx, dy, dz = new_steps[0], new_steps[1], new_steps[2]
-        new_grid = np.mgrid[0:x[-1]:dx, 0:y[-1]:dy, 0:z[-1]:dz]   # new grid
-        new_grid = np.moveaxis(new_grid, (0, 1, 2, 3), (3, 0, 1, 2))  # reorder axes for evaluation
-        
-        return interpolator(new_grid)
+        self.images, self.labels = boss(start, end, seed, data_path, cores)
 
     def __len__(self):
         return len(self.images)
@@ -128,11 +45,10 @@ class AlphaTau3_train(Dataset):
     def __getitem__(self, idx):
         return self.images[idx], self.labels[idx]
 
-def boss(start=0.0, end=0.8, seed=42):
+def boss(start=0.0, end=0.8, seed=42, data_path=r'C:\Users\dingyi.zhang\Documents\MedHacks2021\Tau3_train', cores=10):
     random.seed(seed)
     start = start
     end = end
-    data_path = r'C:\Users\dingyi.zhang\Documents\MedHacks2021\Tau3_train'
     data_path_list = os.listdir(data_path)
     data_path_list.sort()
     image_list = []
@@ -153,7 +69,7 @@ def boss(start=0.0, end=0.8, seed=42):
     label_list = label_list[int(start*len(label_list)): int(end*len(label_list))]
 
     jobs = [[data_path, image_path, label_path] for image_path, label_path in zip(image_list, label_list)]
-    p = Pool(10)
+    p = Pool(cores)
     rtrn = p.map_async(worker, jobs)
 
     loaded = rtrn.get()

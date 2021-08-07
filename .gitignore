@@ -133,3 +133,5 @@ checkpoints/*
 inference/*
 mlruns/*
 *.nii.gz
+temp/*
+*.npy

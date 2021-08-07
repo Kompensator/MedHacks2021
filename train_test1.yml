@@ -80,7 +80,7 @@ loss:
   weight: [0.01, 1.0]   # seeds have 100 times more weight in loss fn
 lr_scheduler:
   factor: 0.2
-  mode: min
+  mode: max
   name: ReduceLROnPlateau
   patience: 13
 manual_seed: 42

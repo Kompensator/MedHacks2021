@@ -28,6 +28,7 @@ def worker(s):
     mask_dir = os.path.join(current_folder, s + '\\masks\\mask.npy')
     img = np.load(img_dir)
     mask = np.load(mask_dir)
+    orig_shape = img.shape
     
     assert img.shape == mask.shape,f"somehow {s} doens't have same shape img vs mask"
     if img.shape[0] != img.shape[1]:
@@ -97,6 +98,16 @@ def worker(s):
             elif y_range > x_range:
                 X_MAX = int(x_center + y_range/2)
                 X_MIN = int(x_center - y_range/2)
+
+            # Correct bug where box is out of bounds
+            if X_MIN < 0:
+                X_MIN = 0
+            if X_MAX > img.shape[0]:
+                X_MAX = img.shape[0]
+            if Y_MIN < 0:
+                Y_MIN = 0
+            if Y_MAX > img.shape[1]:
+                Y_MAX = img.shape[1]
 
         print(f"{s} after crop: {X_MAX-X_MIN}x{Y_MAX-Y_MIN}")
 

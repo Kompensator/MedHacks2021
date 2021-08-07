@@ -13,7 +13,7 @@ def inference():
     with open("UNet3D_config", 'rb') as f:
         model_config = load(f)
 
-    GPU = True
+    GPU = False
 
     model = UNet3D(**model_config, testing=True)      # model is running on CPU
     weights_path = r'C:\Users\dingyi.zhang\Documents\CV-Calcium-DY\checkpoints\dim512_features9_10%_56.h5'      # high DSC: 73%

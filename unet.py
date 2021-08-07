@@ -322,10 +322,10 @@ class UNet3DTrainer:
         # compute the loss
         loss = self.DICE_loss(output, target)
 
-        # if weight is None:
-        #     loss = self.loss_criterion(output, target.long())
-        # else:
-        #     loss = self.loss_criterion(output, target.long(), weight)
+        loss_CE = self.loss_criterion(output, target.long())
+
+        loss = 0.5 * loss_CE + 0.5 * loss
+
 
         return dice.item(), loss
 
@@ -518,4 +518,4 @@ def main(run_name='default'):
 
 
 if __name__ == '__main__':
-    main(run_name='dim512_DICE_20%')
+    main(run_name='dim512_DICE+CE_20%')

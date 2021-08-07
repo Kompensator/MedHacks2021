@@ -319,9 +319,10 @@ class GeneralizedDiceLoss(_AbstractDiceLoss):
     """Computes Generalized Dice Loss (GDL) as described in https://arxiv.org/pdf/1707.03237.pdf.
     """
 
-    def __init__(self, normalization='softmax', epsilon=1e-6, n_classes=2, loss=False):
+    def __init__(self, normalization='softmax', epsilon=1e-6, n_classes=2, loss=False, GPU=True):
         super().__init__(weight=None, normalization=normalization, loss=loss)
         self.epsilon = epsilon
+        self.GPU = GPU
         self.n_classes = n_classes
         
     def _one_hot_encoder(self, input_tensor):
@@ -348,7 +349,10 @@ class GeneralizedDiceLoss(_AbstractDiceLoss):
         w_l = target.sum(-1)
         # w_l = 1 / (w_l * w_l).clamp(min=self./epsilon)
         # w_l.requires_grad = False
-        weights = torch.Tensor([1.0-w_l[0]/(w_l[0] + w_l[1]), 1.0-w_l[1]/(w_l[0] + w_l[1])]).cuda()
+        if self.GPU:
+            weights = torch.Tensor([1.0-w_l[0]/(w_l[0] + w_l[1]), 1.0-w_l[1]/(w_l[0] + w_l[1])]).cuda()
+        else:
+            weights = torch.Tensor([1.0-w_l[0]/(w_l[0] + w_l[1]), 1.0-w_l[1]/(w_l[0] + w_l[1])])
         weights.requires_grad = False
 
         intersect = (input * target).sum(-1)
