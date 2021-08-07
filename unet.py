@@ -166,6 +166,7 @@ class UNet3DTrainer:
             self.run_name = run_name
             save_cp_interval = 2
             self.scaler = torch.cuda.amp.GradScaler(enabled=True)
+            self.DICE = GeneralizedDiceLoss()
             for _ in range(self.num_epoch, 200):
                 try:
                     should_terminate = self.train()
@@ -196,18 +197,19 @@ class UNet3DTrainer:
             True if the training should be terminated immediately, False otherwise
         """
         train_losses = RunningAverage()
-        train_eval_scores = RunningAverage()
 
         self.model.train()
         self.num_iterations = 0
+        dice_train = []
 
         for t in self.loaders['train']:
             input, target, weight = self._split_training_batch(t)
             iteration_per_epoch = self.loaders['train'].dataset.__len__() // input.shape[0] 
             
             with torch.cuda.amp.autocast(enabled=True):
-                output, loss = self._forward_pass(input, target, weight)
+                dice, loss = self._forward_pass(input, target, weight)
 
+            dice_train.append(dice)
             cprint(f'Training iteration [{self.num_iterations + 1}/{iteration_per_epoch}]. '
                         f'Epoch [{self.num_epoch}/{self.max_num_epochs - 1}] Loss [{loss}]', 'green')
     
@@ -222,22 +224,22 @@ class UNet3DTrainer:
             #     return True
             self.num_iterations += 1
         
+        dice_train_avg = sum(dice_train) / len(dice_train)
         self.model.eval()
         val_loss, eval_score = self.validate()
         self.model.train()
 
         # FIXME LR scheduler is being annoying
-        # if isinstance(self.scheduler, ReduceLROnPlateau):
-        #     self.scheduler.step(eval_score)
-        # else:
-        #     self.scheduler.step()
+        self.scheduler.step(eval_score)
+
         # is_best = self._is_best_eval_score(eval_score)
 
         # self._save_checkpoint(is_best)
 
         # log stats, params and images
         cprint(f'Train loss: {train_losses.avg}. Validation loss: {val_loss}', 'blue')
-        self._log_stats(train_losses.avg, val_loss)
+        cprint(f'Train DICE: {dice_train_avg}. Validation DICE: {eval_score}', 'blue')
+        self._log_stats(train_losses.avg, val_loss, dice_train_avg, eval_score)
         self._log_lr()
         # self._log_params()
         # self._log_images(input, target, output, 'train_')
@@ -260,7 +262,7 @@ class UNet3DTrainer:
 
     def validate(self):
         val_losses = RunningAverage()
-        val_scores = RunningAverage()
+        dice_val = []
 
         if self.sample_plotter is not None:
             self.sample_plotter.update_current_dir()
@@ -270,30 +272,31 @@ class UNet3DTrainer:
 
                 input, target, weight = self._split_training_batch(t)
 
-                output, loss = self._forward_pass(input, target, weight)
+                dice, loss = self._forward_pass(input, target, weight)
                 val_losses.update(loss.item(), self._batch_size(input))
+                dice_val.append(dice)
 
                 # if model contains final_activation layer for normalizing logits apply it, otherwise
                 # the evaluation metric will be incorrectly computed
-                if hasattr(self.model, 'final_activation') and self.model.final_activation is not None:
-                    output = self.model.final_activation(output)
+                # if hasattr(self.model, 'final_activation') and self.model.final_activation is not None:
+                #     output = self.model.final_activation(output)
 
-                if i % 100 == 0:
-                    self._log_images(input, target, output, 'val_')
+                # if i % 100 == 0:
+                #     self._log_images(input, target, output, 'val_')
 
                 # eval_score = self.eval_criterion(output, target)          # chance this to dice
                 # val_scores.update(eval_score.item(), self._batch_size(input))
 
-                if self.sample_plotter is not None:
-                    self.sample_plotter(i, input, output, target, 'val')
+                # if self.sample_plotter is not None:
+                #     self.sample_plotter(i, input, output, target, 'val')
 
                 if self.validate_iters is not None and self.validate_iters <= i:
                     # stop validation
                     break
-
+            
             # self._log_stats('val', val_losses.avg, val_scores.avg)
             # cprint(f'Validation finished. Loss: {val_losses.avg}. Evaluation score: {0}', 'blue')
-            return val_losses.avg, 0
+            return val_losses.avg, sum(dice_val)/len(dice_val)
 
     def _split_training_batch(self, t):
         def _move_to_device(input):
@@ -313,14 +316,15 @@ class UNet3DTrainer:
     def _forward_pass(self, input, target, weight=None):
         # forward pass
         output = self.model(input)
-
+        
+        dice = self.DICE(output, target)
         # compute the loss
         if weight is None:
             loss = self.loss_criterion(output, target.long())
         else:
             loss = self.loss_criterion(output, target.long(), weight)
 
-        return output, loss
+        return dice.item(), loss
 
     def _is_best_eval_score(self, eval_score):
         if self.eval_score_higher_is_better:
@@ -364,9 +368,11 @@ class UNet3DTrainer:
         # self.writer.add_scalar('learning_rate', lr, self.num_epoch)
         log_metric("lr", lr, self.num_epoch)
 
-    def _log_stats(self, loss_avg, val_loss):
+    def _log_stats(self, loss_avg, val_loss, train_dice, val_dice):
         log_metric('train loss', loss_avg, self.num_epoch)
         log_metric('val loss', val_loss, self.num_epoch)
+        log_metric('train DICE', train_dice, self.num_epoch)
+        log_metric('val DICE', val_dice, self.num_epoch)
 
     def _log_params(self):
         # cprint('Logging model parameters and gradients', 'yellow')

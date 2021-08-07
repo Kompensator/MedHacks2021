@@ -267,7 +267,7 @@ class _AbstractDiceLoss(nn.Module):
     Base class for different implementations of Dice loss.
     """
 
-    def __init__(self, weight=None, normalization='sigmoid'):
+    def __init__(self, weight=None, normalization='sigmoid', loss=False):
         super(_AbstractDiceLoss, self).__init__()
         self.register_buffer('weight', weight)
         # The output from the network during training is assumed to be un-normalized probabilities and we would
@@ -275,6 +275,7 @@ class _AbstractDiceLoss(nn.Module):
         # normalizing the channels with Sigmoid is the default choice even for multi-class segmentation problems.
         # However if one would like to apply Softmax in order to get the proper probability distribution from the
         # output, just specify `normalization=Softmax`
+        self.loss = loss
         assert normalization in ['sigmoid', 'softmax', 'none']
         if normalization == 'sigmoid':
             self.normalization = nn.Sigmoid()
@@ -295,7 +296,10 @@ class _AbstractDiceLoss(nn.Module):
         per_channel_dice = self.dice(input, target, weight=self.weight)
 
         # average Dice score across all channels/classes
-        return 1. - torch.mean(per_channel_dice)
+        if self.loss:
+            return 1. - torch.mean(per_channel_dice)
+        else:
+            return torch.mean(per_channel_dice)
 
 
 class DiceLoss(_AbstractDiceLoss):
