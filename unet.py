@@ -445,8 +445,10 @@ def build_trainer(config):
     loss_criterion = get_loss_criterion(config)
     eval_criterion = get_evaluation_metric(config)
 
-    train_dataset = AlphaTau3_train(start=0.0, end=0.2)
-    val_dataset = AlphaTau3_train(start=0.2, end=0.3)
+    # train_dataset = AlphaTau3_train(start=0.0, end=0.2)
+    # val_dataset = AlphaTau3_train(start=0.2, end=0.3)
+    train_dataset = AlphaTau3_train(start=0.0, end=0.8, data_path=r'C:\Users\dingyi.zhang\Documents\MedHacks2021\alphatau3_hard')
+    val_dataset = AlphaTau3_train(start=0.8, end=1.0, data_path=r'C:\Users\dingyi.zhang\Documents\MedHacks2021\alphatau3_hard')
 
     train_loader = DataLoader(train_dataset, batch_size=1)       #NOTE: batchsize is here!
     val_loader = DataLoader(val_dataset, batch_size=1)
@@ -518,4 +520,4 @@ def main(run_name='default'):
 
 
 if __name__ == '__main__':
-    main(run_name='dim384_0.0003_threshold')
+    main(run_name='hard_384_18features_0.0004')

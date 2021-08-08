@@ -94,7 +94,7 @@ model:
   num_groups: 1
   out_channels: 2
 optimizer:
-  learning_rate: 0.0003
+  learning_rate: 0.0004
   weight_decay: 1.0e-05
 trainer:
   # checkpoint_dir: "/Users/DY/semantic_3D_test/checkpoints/"

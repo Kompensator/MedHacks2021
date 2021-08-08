@@ -15,7 +15,7 @@ tau3_hard = r'C:\Users\dingyi.zhang\Downloads\AlphaTau3\hard_dataset'
 tau1 = r'C:\Users\dingyi.zhang\Documents\AlphaTau\Tau1'
 tau3_train = r'C:\Users\dingyi.zhang\Downloads\AlphaTau3\train'
 
-current_folder = tau3_train
+current_folder = tau3_hard
 
 padding = 20
 square = True       # if False, bounding box will be a rectangle tangential to the outline of body
@@ -34,7 +34,7 @@ def worker(s):
     if img.shape[0] != img.shape[1]:
         cprint(f"{s} is non square, this means the data is likely incomplete", 'red')
         cprint(f"{s} shape: {img.shape}", 'red')
-        complete_data = False
+        complete_data = True
     else:
         cprint(f"{s} shape: {img.shape}", 'green')
         complete_data = True
@@ -120,7 +120,7 @@ def worker(s):
         img = orig_img[X_MIN:X_MAX, Y_MIN:Y_MAX, :]
         mask = mask[X_MIN:X_MAX, Y_MIN:Y_MAX, :]
 
-        save_dir = r'C:\Users\dingyi.zhang\Documents\MedHacks2021\Tau3_train'
+        save_dir = r'C:\Users\dingyi.zhang\Documents\MedHacks2021\alphatau3_hard'
         nifti = nib.Nifti1Image(img, np.eye(4))
         nib.save(nifti, f"{save_dir}\\{s}_image.nii.gz")
         nifti = nib.Nifti1Image(mask, np.eye(4))
