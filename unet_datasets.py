@@ -95,7 +95,7 @@ def worker(job):
             label = np.array(nib.load(os.path.join(data_path, label_name)).get_fdata())
             assert image.shape == label.shape, "{} and {} dont have same shape".format(image_name, label_name)
 
-            target_dim = (512, 512, 40)
+            target_dim = (384, 384, 40)
             scaling = (target_dim[0]/image.shape[0], target_dim[1]/image.shape[1], target_dim[2]/image.shape[2])
             image = grid_interpolator(image, scaling, 'linear')
             label = grid_interpolator(label, scaling, 'nearest')

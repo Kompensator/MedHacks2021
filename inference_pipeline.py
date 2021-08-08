@@ -9,6 +9,7 @@ from unet_datasets import *
 from unet_model import *
 from unet_utils import *
 from pickle import load
+from tqdm import tqdm
 
 """ Runs the entire segmentation inference pipeline
     - takes in a the name of folder (ex '001')
@@ -128,21 +129,18 @@ def worker(s, current_folder, square=True, padding=20):
 
         return orig_img, orig_mask, has_mask, orig_shape, [X_MIN, X_MAX, Y_MIN, Y_MAX, 0, img.shape[2]]
 
-def inference(test_loader, has_mask=True, GPU=True):
-    with open("UNet3D_config", 'rb') as f:
+def inference(test_loader, has_mask=True, weights_path=r'C:\Users\dingyi.zhang\Documents\CV-Calcium-DY\checkpoints\test_dim384_30features_52.h5', GPU=False):
+    with open("UNet3D_config_384_18", 'rb') as f:
         model_config = load(f)
 
     model = UNet3D(**model_config, testing=True)      # model is running on CPU
-    weights_path = r'C:\Users\dingyi.zhang\Documents\CV-Calcium-DY\checkpoints\dim512_features9_10%_56.h5'      # high DSC: 73%
-    weights_path = r'C:\Users\dingyi.zhang\Documents\CV-Calcium-DY\checkpoints\dim512_features9_20%_90.h5'
-    # weights_path = r'C:\Users\dingyi.zhang\Documents\CV-Calcium-DY\checkpoints\dim512_features9_10%_62.h5'      # low CE but really poor performance
     model.load_state_dict(torch.load(weights_path))
     if GPU:
         model.cuda()
 
     weight = torch.Tensor([0.01, 1.0])
     # loss = torch.nn.CrossEntropyLoss(weight=weight)
-    DICE = GeneralizedDiceLoss(loss=False, GPU=False)
+    DICE = GeneralizedDiceLoss(loss=False, GPU=GPU)
 
     loss_accum = []
     inputs, outputs, labels = [], [], []
@@ -179,48 +177,44 @@ def inference(test_loader, has_mask=True, GPU=True):
 
 def pad(arr, target_shape):
     """ In case arr.shape != target_shape due to interpolation"""
-    # NOTE OPPOSITE OF THE PADDING OPERATION IN DATASET
     diff_shape = [i-j for i, j in zip(target_shape, arr.shape)]
-    arr = np.pad(arr, ((diff_shape[0], 0), (diff_shape[1], 0), (diff_shape[2], 0)), 'constant')
+    arr = np.pad(arr, ((diff_shape[0], 0), (diff_shape[1], 0), (0, diff_shape[2])), 'constant')
     return arr
 
-def main():
+def main(folders):
     padding = 20
     square = True       # if False, bounding box will be a rectangle tangential to the outline of body
 
-    if len(argv) < 2:
-        print("No file provided, running 014 instead")
-        folder = '014'
-    else:
-        folder = argv[1]
-    print("Running inference on: " + folder)
+    temp_files = os.listdir(r'C:\Users\dingyi.zhang\Documents\MedHacks2021\temp')
+    for file in temp_files:
+        os.remove(r'C:\Users\dingyi.zhang\Documents\MedHacks2021\temp\\' + file)
 
-    dataset = r'C:\Users\dingyi.zhang\Downloads\AlphaTau3\train'
-    img, mask, has_mask, orig_size, crop = worker(folder, dataset)
-    
+    dataset = r'C:\Users\dingyi.zhang\Downloads\AlphaTau3\train'        # unzipped alphatau dataset
+    img, mask, has_mask, orig_size, crop = worker(folders, dataset)
+
     after_crop_size = (crop[1] - crop[0], crop[3] - crop[2], crop[5] - crop[4])
-    NN_input_size = (512, 512, 40)
+    NN_input_size = (384, 384, 40)
+
     test_set = AlphaTau3_train(start=0.0, end=1.0, data_path= r'C:\Users\dingyi.zhang\Documents\MedHacks2021\temp', cores=1)
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=1)
 
     # inference
-    outputs, loss = inference(test_loader, has_mask, GPU=False)
+    outputs, loss = inference(test_loader, has_mask, weights_path=r'C:\Users\dingyi.zhang\Documents\CV-Calcium-DY\checkpoints\test_dim384_30features_52.h5', GPU=False)
     outputs = outputs[0]
 
     # undo the resizing from cropped to NN input
     reverse_scaling = [after_crop_size[0]/NN_input_size[0], after_crop_size[1]/NN_input_size[1], after_crop_size[2]/NN_input_size[2]]
     outputs = grid_interpolator(outputs, reverse_scaling, "nearest")
+
+    # (usually Z is off by 1)
+    outputs = pad(outputs, after_crop_size)
     
     # re-crop to original size
     outputs = np.pad(outputs, ((crop[0], orig_size[0]-crop[1]), (crop[2], orig_size[1]-crop[3]), (0, 0)), 'constant', constant_values=0)
 
-    # re-pad in the opposite order than in dataset, should not be a big discrepency
-    outputs = pad(outputs, orig_size)
-    
     assert outputs.shape == img.shape, "Final output shape is not the same as input shape!!"
 
     np.save('{}_predicted'.format(folder), outputs)
-    np.save('{}_input'.format(folder), img)
 
     nifti = nib.Nifti1Image(outputs, np.eye(4))
     nib.save(nifti, '{}_predicted.nii.gz'.format(folder))
@@ -231,6 +225,14 @@ def main():
 
     # saving img as dicom logic here
 
-
 if __name__ == "__main__":
-    main()
+    if len(argv) < 2:
+        print("No file provided, running 014 instead")
+        folder = '014'
+    else:
+        folder = argv[1]
+
+    root = r'C:\Users\dingyi.zhang\Downloads\AlphaTau3\train'
+    folders = os.listdir(root)
+    for f in folders:
+        main(f)

@@ -446,7 +446,7 @@ def build_trainer(config):
     eval_criterion = get_evaluation_metric(config)
 
     train_dataset = AlphaTau3_train(start=0.0, end=0.2)
-    val_dataset = AlphaTau3_train(start=0.2, end=0.24)
+    val_dataset = AlphaTau3_train(start=0.2, end=0.3)
 
     train_loader = DataLoader(train_dataset, batch_size=1)       #NOTE: batchsize is here!
     val_loader = DataLoader(val_dataset, batch_size=1)
@@ -518,4 +518,4 @@ def main(run_name='default'):
 
 
 if __name__ == '__main__':
-    main(run_name='dim512_DICE+CE_20%')
+    main(run_name='dim384_18_LR0.0001')

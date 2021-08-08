@@ -24,7 +24,7 @@ class Attention(nn.Module):
         super(Attention, self).__init__()
         self.output_image = output_image
         self.patch_size = 2            # NOTE higher patch_size conv doesn't work with 4 down conv
-        self.n_patch = int((img_size/self.patch_size) ** 3)          # NOTE assuming a cube shaped embedding
+        self.n_patch = 64          # NOTE assuming a cube shaped embedding
         self.patch_embeddings = nn.Conv3d(in_channels=in_channels, 
                                             out_channels=config.embedding_size,
                                             kernel_size=(self.patch_size, self.patch_size, self.patch_size),
@@ -95,7 +95,7 @@ class Attention(nn.Module):
 
         context = torch.matmul(attention_probs, V).permute(0, 2, 1, 3).contiguous()
         new_context_layer_shape = context.size()[:-2] + (self.head_size,)
-        context = context.view(*new_context_layer_shape)                # FIXME
+        context = context.view(*new_context_layer_shape)
 
         attention_output = self.out(context)
         attention_output = self.projection_dropout(attention_output)
@@ -118,6 +118,31 @@ class Attention(nn.Module):
         return x, attn_map
 
 
+class Conv2dReLU(nn.Sequential):
+    def __init__(
+            self,
+            in_channels,
+            out_channels,
+            kernel_size,
+            padding=0,
+            stride=1,
+            use_batchnorm=True,
+    ):
+        conv = nn.Conv2d(
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride=stride,
+            padding=padding,
+            bias=not (use_batchnorm),
+        )
+        relu = nn.ReLU(inplace=True)
+
+        bn = nn.BatchNorm2d(out_channels)
+
+        super(Conv2dReLU, self).__init__(conv, bn, relu)
+
+
 class TransUNetV2(nn.Module):
     """ traditional 2D UNet with attention layer in between
         down sampling operations"""
@@ -132,7 +157,15 @@ class TransUNetV2(nn.Module):
         bilinear = True
         factor = 2
         self.down4 = Down(256, 512 // factor)
-        self.attention = Attention(config, 256, img_size=img_size/16, output_image=True)
+        self.attention = Attention(config, 256, img_size=img_size/2, output_image=True)
+
+        self.conv_more = Conv2dReLU(
+            config.hidden_size,
+            512,
+            kernel_size=3,
+            padding=1,
+            use_batchnorm=True,
+        )
 
         self.up1 = Up(512, 256 // factor, bilinear)
         self.up2 = Up(256, 128 // factor, bilinear)
@@ -150,9 +183,17 @@ class TransUNetV2(nn.Module):
         x4 = self.down3(x3)
         x5 = self.down4(x4)
 
+        shape_before_attn = x5.size()
+
         x5 = self.attention(x5)
 
-        x = self.up1(x5, x4)
+        B, n_patch, hidden = x5.size()  # reshape from (B, n_patch, hidden) to (B, h, w, hidden)
+        h, w, z = int(shape_before_attn[-3], shape_before_attn[-2], shape_before_attn[-1])
+        x = x5.permute(0, 2, 1)
+        x = x.contiguous().view(B, hidden, h, w, z)
+        x = self.conv_more(x)
+
+        x = self.up1(x, x4)
         x = self.up2(x, x3)
         x = self.up3(x, x2)
         x = self.up4(x, x1)

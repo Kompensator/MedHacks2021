@@ -13,12 +13,13 @@ def inference():
     with open("UNet3D_config", 'rb') as f:
         model_config = load(f)
 
-    GPU = False
+    GPU = True
 
     model = UNet3D(**model_config, testing=True)      # model is running on CPU
-    weights_path = r'C:\Users\dingyi.zhang\Documents\CV-Calcium-DY\checkpoints\dim512_features9_10%_56.h5'      # high DSC: 73%
-    weights_path = r'C:\Users\dingyi.zhang\Documents\CV-Calcium-DY\checkpoints\dim512_features9_20%_90.h5'
+    # weights_path = r'C:\Users\dingyi.zhang\Documents\CV-Calcium-DY\checkpoints\dim512_features9_10%_56.h5'      # high DSC: 73%
+    # weights_path = r'C:\Users\dingyi.zhang\Documents\CV-Calcium-DY\checkpoints\dim512_features9_20%_90.h5'
     # weights_path = r'C:\Users\dingyi.zhang\Documents\CV-Calcium-DY\checkpoints\dim512_features9_10%_62.h5'      # low CE but really poor performance
+    weights_path = r'C:\Users\dingyi.zhang\Documents\CV-Calcium-DY\checkpoints\dim512_DICE+CE_20%_46.h5'
     model.load_state_dict(torch.load(weights_path))
     if GPU:
         model.cuda()
@@ -74,16 +75,6 @@ def inference():
         nifti = nib.Nifti1Image(label, affine=np.eye(4))
         nib.save(nifti, f'{save_dir}\\{i}_label.nii.gz')
 
-
-    # for i in slices_with_ca:
-    #     f, ax = plt.subplots(1, 3)
-    #     ax[0].imshow(data[:, :, i], cmap='gray')
-    #     ax[0].set_title(f"Slice {i} out of {output.shape[2]}")
-    #     ax[1].imshow(output[:, :, i])
-    #     ax[1].set_title("3D-UNet prediction")
-    #     ax[2].imshow(target[:, :, i])
-    #     ax[2].set_title("Ground truth")
-    #     plt.show()
 
 if __name__ == "__main__":
     inference()
