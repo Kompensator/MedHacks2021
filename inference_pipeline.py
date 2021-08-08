@@ -36,7 +36,7 @@ def worker(s, current_folder, square=True, padding=20):
     if img.shape[0] != img.shape[1]:
         cprint(f"{s} is non square, this means the data is likely incomplete", 'red')
         cprint(f"{s} shape: {img.shape}", 'red')
-        complete_data = False
+        complete_data = True
     else:
         cprint(f"{s} shape: {img.shape}", 'green')
         complete_data = True
@@ -129,7 +129,7 @@ def worker(s, current_folder, square=True, padding=20):
 
         return orig_img, orig_mask, has_mask, orig_shape, [X_MIN, X_MAX, Y_MIN, Y_MAX, 0, img.shape[2]]
 
-def inference(test_loader, has_mask=True, weights_path=r'C:\Users\dingyi.zhang\Documents\CV-Calcium-DY\checkpoints\test_dim384_30features_52.h5', GPU=False):
+def inference(test_loader, has_mask, weights_path, GPU=False):
     with open("UNet3D_config_384_18", 'rb') as f:
         model_config = load(f)
 
@@ -166,12 +166,12 @@ def inference(test_loader, has_mask=True, weights_path=r'C:\Users\dingyi.zhang\D
         pred = np.squeeze(np.squeeze(pred, axis=0), axis=0)
         data = np.squeeze(np.squeeze(data, axis=0), axis=0)
         target = np.squeeze(target, axis=0)
-        inputs.append(data)
+        # inputs.append(data)
         outputs.append(pred)
-        labels.append(target)
+        # labels.append(target)
     
     if has_mask:
-        return outputs, sum(loss_accum)/(len(loss_accum))
+        return outputs, loss_accum
     else:
         return outputs, None
 
@@ -185,54 +185,63 @@ def main(folders):
     padding = 20
     square = True       # if False, bounding box will be a rectangle tangential to the outline of body
 
-    temp_files = os.listdir(r'C:\Users\dingyi.zhang\Documents\MedHacks2021\temp')
-    for file in temp_files:
-        os.remove(r'C:\Users\dingyi.zhang\Documents\MedHacks2021\temp\\' + file)
+    # temp_files = os.listdir(r'C:\Users\dingyi.zhang\Documents\MedHacks2021\temp')
+    # for file in temp_files:
+    #     os.remove(r'C:\Users\dingyi.zhang\Documents\MedHacks2021\temp\\' + file)
 
-    dataset = r'C:\Users\dingyi.zhang\Downloads\AlphaTau3\train'        # unzipped alphatau dataset
-    img, mask, has_mask, orig_size, crop = worker(folders, dataset)
+    dataset = r'C:\Users\dingyi.zhang\Downloads\AlphaTau3\test'        # unzipped alphatau dataset
+    imgs, masks, has_masks, orig_sizes, crops = [], [], [], [], []
+    for folder in folders:
+        img, mask, has_mask, orig_size, crop = worker(folder, dataset)
+        imgs.append(img)
+        # masks.append(mask)
+        has_masks.append(has_mask)
+        orig_sizes.append(orig_size)
+        crops.append(crop)
 
-    after_crop_size = (crop[1] - crop[0], crop[3] - crop[2], crop[5] - crop[4])
+    after_crop_sizes = []
+    for crop in crops:
+        after_crop_size = (crop[1] - crop[0], crop[3] - crop[2], crop[5] - crop[4])
+        after_crop_sizes.append(after_crop_size)
     NN_input_size = (384, 384, 40)
 
-    test_set = AlphaTau3_train(start=0.0, end=1.0, data_path= r'C:\Users\dingyi.zhang\Documents\MedHacks2021\temp', cores=1)
+    test_set = AlphaTau3_train(start=0.0, end=1.0, data_path= r'C:\Users\dingyi.zhang\Documents\MedHacks2021\temp', cores=10, rand=False)
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=1)
 
     # inference
-    outputs, loss = inference(test_loader, has_mask, weights_path=r'C:\Users\dingyi.zhang\Documents\CV-Calcium-DY\checkpoints\test_dim384_30features_52.h5', GPU=False)
-    outputs = outputs[0]
+    outputs, losses = inference(test_loader, has_mask, weights_path=r'C:\Users\dingyi.zhang\Documents\CV-Calcium-DY\checkpoints\dim384_18_LR0.0001_110.h5', GPU=False)
 
-    # undo the resizing from cropped to NN input
-    reverse_scaling = [after_crop_size[0]/NN_input_size[0], after_crop_size[1]/NN_input_size[1], after_crop_size[2]/NN_input_size[2]]
-    outputs = grid_interpolator(outputs, reverse_scaling, "nearest")
+    for i, output in enumerate(outputs):
+        # undo the resizing from cropped to NN input
+        reverse_scaling = [after_crop_sizes[i][0]/NN_input_size[0], after_crop_sizes[i][1]/NN_input_size[1], after_crop_size[i][2]/NN_input_size[2]]
+        output = grid_interpolator(output, reverse_scaling, "nearest")
 
-    # (usually Z is off by 1)
-    outputs = pad(outputs, after_crop_size)
-    
-    # re-crop to original size
-    outputs = np.pad(outputs, ((crop[0], orig_size[0]-crop[1]), (crop[2], orig_size[1]-crop[3]), (0, 0)), 'constant', constant_values=0)
+        # (usually Z is off by 1)
+        output = pad(output, after_crop_sizes[i])
+        
+        # re-crop to original size
+        output = np.pad(output, ((crops[i][0], orig_sizes[i][0]-crops[i][1]), (crops[i][2], orig_sizes[i][1]-crops[i][3]), (0, 0)), 'constant', constant_values=0)
 
-    assert outputs.shape == img.shape, "Final output shape is not the same as input shape!!"
+        assert output.shape == imgs[i].shape, "Final output shape is not the same as input shape!!"
 
-    np.save('{}_predicted'.format(folder), outputs)
+        np.save('test{}_predicted'.format(folders[i]), output)
 
-    nifti = nib.Nifti1Image(outputs, np.eye(4))
-    nib.save(nifti, '{}_predicted.nii.gz'.format(folder))
-    nifti = nib.Nifti1Image(mask, np.eye(4))
-    nib.save(nifti, '{}_label.nii.gz'.format(folder))
-    nifti = nib.Nifti1Image(img, np.eye(4))
-    nib.save(nifti, '{}_input.nii.gz'.format(folder))
+        nifti = nib.Nifti1Image(output, np.eye(4))
+        nib.save(nifti, 'test{}_predicted.nii.gz'.format(folders[i]))
+        # nifti = nib.Nifti1Image(masks[i], np.eye(4))
+        # nib.save(nifti, '{}_label.nii.gz'.format(folders[i]))
+        nifti = nib.Nifti1Image(imgs[i], np.eye(4))
+        nib.save(nifti, 'test{}_input.nii.gz'.format(folders[i]))
 
     # saving img as dicom logic here
 
 if __name__ == "__main__":
-    if len(argv) < 2:
-        print("No file provided, running 014 instead")
-        folder = '014'
-    else:
-        folder = argv[1]
+    # if len(argv) < 2:
+    #     print("No file provided, running 014 instead")
+    #     folder = ['014']
+    # else:
+    #     folder = [argv[1]]
 
-    root = r'C:\Users\dingyi.zhang\Downloads\AlphaTau3\train'
+    root = r'C:\Users\dingyi.zhang\Downloads\AlphaTau3\test'
     folders = os.listdir(root)
-    for f in folders:
-        main(f)
+    main(folders)

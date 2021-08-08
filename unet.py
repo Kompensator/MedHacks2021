@@ -518,4 +518,4 @@ def main(run_name='default'):
 
 
 if __name__ == '__main__':
-    main(run_name='dim384_18_LR0.0001')
+    main(run_name='dim384_0.0003_threshold')

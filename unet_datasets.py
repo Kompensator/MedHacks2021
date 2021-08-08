@@ -35,9 +35,9 @@ def random_rotate_90(m, random_state, **kwargs):
     return m
 
 class AlphaTau3_train(Dataset):
-    def __init__(self, start=0.0, end=0.8, seed=42, data_path=r'C:\Users\dingyi.zhang\Documents\MedHacks2021\Tau3_train', cores=10):
+    def __init__(self, start=0.0, end=0.8, seed=42, data_path=r'C:\Users\dingyi.zhang\Documents\MedHacks2021\Tau3_train', cores=10, rand=True):
         super(AlphaTau3_train, self).__init__()
-        self.images, self.labels = boss(start, end, seed, data_path, cores)
+        self.images, self.labels = boss(start, end, seed, data_path, cores, rand)
 
     def __len__(self):
         return len(self.images)
@@ -45,7 +45,7 @@ class AlphaTau3_train(Dataset):
     def __getitem__(self, idx):
         return self.images[idx], self.labels[idx]
 
-def boss(start=0.0, end=0.8, seed=42, data_path=r'C:\Users\dingyi.zhang\Documents\MedHacks2021\Tau3_train', cores=10):
+def boss(start=0.0, end=0.8, seed=42, data_path=r'C:\Users\dingyi.zhang\Documents\MedHacks2021\Tau3_train', cores=10, rand=True):
     random.seed(seed)
     start = start
     end = end
@@ -61,18 +61,17 @@ def boss(start=0.0, end=0.8, seed=42, data_path=r'C:\Users\dingyi.zhang\Document
         elif "mask" in i:
             label_list.append(i)
 
-    c = list(zip(image_list, label_list))
-    random.shuffle(c)
-    image_list, label_list = zip(*c)
+    if rand:
+        c = list(zip(image_list, label_list))
+        random.shuffle(c)
+        image_list, label_list = zip(*c)
 
     image_list = image_list[int(start*len(image_list)): int(end*len(image_list))]
     label_list = label_list[int(start*len(label_list)): int(end*len(label_list))]
 
     jobs = [[data_path, image_path, label_path] for image_path, label_path in zip(image_list, label_list)]
     p = Pool(cores)
-    rtrn = p.map_async(worker, jobs)
-
-    loaded = rtrn.get()
+    loaded = p.map(worker, jobs)
 
     images = [job[0] for job in loaded if job is not None]
     labels = [job[1] for job in loaded if job is not None]
@@ -104,6 +103,10 @@ def worker(job):
             
             # one-hot encode all class in label to be 1
             label[label != 0] = 1
+
+            # trying image threshold [-80, 175]
+            # image[image < -80] = -1024
+            # image[image > 175] = -1024
 
             if image.shape != target_dim:
                 image = pad(image, target_dim)
