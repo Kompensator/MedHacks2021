@@ -1,5 +1,4 @@
-# CoreSeed: 3D-UNet pipeline with browser-based implementation for Alpha DaRT localization 
-# McMedHacks2021
+# # McMedHacks2021/CoreSeed: 3D-UNet pipeline with browser-based implementation for Alpha DaRT localization 
 ## Ding Yi Zhang, Zara Vajihi, Philippe Marchandise, Jonathan Afilalo 
 
 ## Objective:
@@ -12,3 +11,5 @@ We developed the CoreSeed pipeline with the following steps. We crop and resize 
 CoreSeed achieved a DICE score of 93% in the validation set, with the DICE score weighted to be inversely proportional to the number of voxels in each class (to better reflect correct classification of the small seeds rather than the large background class). The pipeline and deep learning model were successfully deployed and accessible on a local version of the CoreSlicer app, allowing the end-user to upload the CT images and run the deep learning model using a graphical interface, then visualize and edit the predicted seed masks in three-dimensions, and export them to a structured output file containing coordinates. 
 ## Conclusions: 
 CoreSeed is an accurate and practical solution to localize and visualize Alpha DaRT seeds for targeted radiation therapy using a 3D-UNet architecture integrated in a user-friendly browser-based web app. 
+
+![Award won](https://github.com/Kompensator/MedHacks2021/blob/main/MedHacks2021%20award%201.png)
